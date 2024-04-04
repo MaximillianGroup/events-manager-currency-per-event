@@ -9,16 +9,24 @@
  * License: GPL2
  */
 
-function em_curr_check_em_active() {
-	if( !function_exists('em_get_currencies') ) {
-		add_action( 'admin_notices', 'em_not_activated_currency_error_notice' );
-	}
-}
-add_action('plugins_loaded', 'em_curr_check_em_active');
+// Hook the function to the plugins_loaded action
+add_action('plugins_loaded', 'check_em_currencies_active');
 
-function em_not_activated_currency_error_notice() {
-	$message = __('Please ensure Events Manager is enabled for the Currencies per Event plugin to work.', 'em-pro');
-	echo '<div class="error"> <p>'.$message.'</p></div>';
+// Function to check if Events Manager is active and if not, display an error notice
+function check_em_currencies_active() {
+    // Check if the function em_get_currencies exists
+    if (!function_exists('em_get_currencies')) {
+        // If not, hook the display_em_currency_error_notice function to the admin_notices action
+        add_action('admin_notices', 'display_em_currency_error_notice');
+    }
+}
+
+// Function to display an error notice if Events Manager is not active
+function display_em_currency_error_notice() {
+    // Define the error message
+    $message = __('Please ensure Events Manager is enabled for the Currencies per Event plugin to work.', 'em-pro');
+    // Output the error message within a div with the 'error' class
+    echo '<div class="error"> <p>' . $message . '</p></div>';
 }
 
 /**
@@ -43,65 +51,69 @@ add_action( 'add_meta_boxes_event', 'em_curr_adding_custom_meta_boxes', 10, 2 );
  * Events Manager at the time of writing.
  * Note, this option is disabled when in Multiple Bookings mode
  */
-function render_curency_meta_box() {
-	global $post;
+function render_currency_meta_box() {
+    global $post;
 
-	$currencies = em_get_currencies();
+    // Get the list of currencies
+    $currencies = em_get_currencies();
 
-	if( get_option('dbem_multiple_bookings', 0) ) {
-		_e('Currencies cannot be set per event when multiple bookings mode is enabled.');
-		return;
-	}
+    // Check if multiple bookings mode is enabled
+    if (get_option('dbem_multiple_bookings', 0)) {
+        // If enabled, display a message and return
+        echo('Currencies cannot be set per event when multiple bookings mode is enabled.');
+        return;
+    }
 
-	$curr_value = get_post_meta( $post->ID, '_event_currency', true );
+    // Get the currency value for the current event
+    $curr_value = get_post_meta($post->ID, 'star_em_event_currency', true);
 
-	?>
-	<p><strong>
-		<?php _e('Default Currency') ?>: <?php echo esc_html(get_option('dbem_bookings_currency','USD')); ?>
-	</strong></p>
-	<p>
-		<?php _e('The currency for all events is configured under Events -> Settings -> Bookings -> Pricing Options.') ?>
-		<?php _e('If you want this event to use a different currency to the above, select from the list below.') ?>
-	</p>
+    // Output HTML content directly within PHP
+    echo '<p><strong>';
+    echo __('Default Currency', 'textdomain') . ': ' . esc_html(get_option('dbem_bookings_currency', 'USD'));
+    echo '</strong></p>';
+    echo '<p>';
+    echo __('The currency for all events is configured under Events -> Settings -> Bookings -> Pricing Options.', 'textdomain');
+    echo __('If you want this event to use a different currency to the above, select from the list below.', 'textdomain');
+    echo '</p>';
 
-	<select name="dbem_bookings_currency">
-		<option value="">Use Default</option>
-		<?php foreach( $currencies->names as $key => $currency) : ?>
-		<option value="<?php echo $key ?>" <?php echo ($curr_value == $key ? 'selected=selected':'') ?>>
-			<?php echo $currency ?>
-		</option>
-		<?php endforeach; ?>
-	</select>
-	<?php
+    // Output currency dropdown
+    echo '<select name="dbem_bookings_currency">';
+    echo '<option value="">Use Default</option>';
+    foreach ($currencies->names as $key => $currency) {
+        echo '<option value="' . $key . '" ' . ($curr_value == $key ? 'selected="selected"' : '') . '>' . $currency . '</option>';
+    }
+    echo '</select>';
 }
 
 /**
  * Hook into front end event submission form and add currency fields
  */
 function em_curr_front_event_form_footer() {
+    global $post;
 
-	$currencies = em_get_currencies();
+    // Get the list of currencies
+    $currencies = em_get_currencies();
 
-	if( get_option('dbem_multiple_bookings', 0) ) {
-		return;
-	}
+    // Check if multiple bookings mode is enabled
+    if (get_option('dbem_multiple_bookings', 0)) {
+        return;
+    }
 
-	$curr_value = get_post_meta( $post->ID, '_event_currency', true );
+    // Get the currency value for the current event
+    $curr_value = get_post_meta($post->ID, 'star_em_event_currency', true);
 
-	$default_currency = esc_html(get_option('dbem_bookings_currency','USD'));
-	?>
-	<h3><?php _e( 'Event Currency' ); ?></h3>
-	<select name="dbem_bookings_currency">
-		<option><?php echo $default_currency ?> - <?php echo $currencies->names[ $default_currency ] ?></option>
-		<option disabled>------------------</option>
-		<?php foreach( $currencies->names as $key => $currency) : ?>
-		<option value="<?php echo $key ?>">
-			<?php echo $key ?> - <?php echo $currency ?>
-		</option>
-		<?php endforeach; ?>
-	</select>
-	<?php
+    // Get the default currency
+    $default_currency = esc_html(get_option('dbem_bookings_currency', 'USD'));
 
+    // Output HTML content directly within PHP
+    echo '<h3>' . __('Event Currency', 'textdomain') . '</h3>';
+    echo '<select name="dbem_bookings_currency">';
+    echo '<option>' . $default_currency . ' - ' . $currencies->names[$default_currency] . '</option>';
+    echo '<option disabled>------------------</option>';
+    foreach ($currencies->names as $key => $currency) {
+        echo '<option value="' . $key . '">' . $key . ' - ' . $currency . '</option>';
+    }
+    echo '</select>';
 }
 add_action('em_front_event_form_footer', 'em_curr_front_event_form_footer');
 
@@ -110,29 +122,35 @@ add_action('em_front_event_form_footer', 'em_curr_front_event_form_footer');
  * Save currency option setting
  */
 function em_curr_save_post($post_id, $post) {
+    // Verify this came from our screen and with proper authorization,
+    // because save_post can be triggered at other times
+    $edit_event_nonce = isset($_POST['_emnonce']) ? $_POST['_emnonce'] : '';
+    $wp_nonce = isset($_POST['_wpnonce']) ? $_POST['_wpnonce'] : '';
 
-	// verify this came from the our screen and with proper authorization,
-	// because save_post can be triggered at other times
-	if ( !wp_verify_nonce( $_POST['_emnonce'], 'edit_event' ) &&
-		   !wp_verify_nonce( $_POST['_wpnonce'], 'wpnonce_event_save' ) ) {
-		return $post->ID;
-	}
+    if (!wp_verify_nonce($edit_event_nonce, 'edit_event') && !wp_verify_nonce($wp_nonce, 'wpnonce_event_save')) {
+        return $post_id;
+    }
 
-	// Is the user allowed to edit the post or page?
-	if ( !current_user_can( 'edit_post', $post->ID ))
-		return $post->ID;
+    // Check if the user has the proper capabilities to edit the post
+    if (!current_user_can('edit_post', $post_id)) {
+        return $post_id;
+    }
 
-	if( $post->post_type == 'revision' )
-		return $post->ID; // Don't store custom data twice
+    // Skip saving data if post type is a revision
+    if ($post->post_type == 'revision') {
+        return $post_id;
+    }
 
-	if( isset( $_POST['dbem_bookings_currency'] ) ) {
-		update_post_meta( $post->ID, '_event_currency', $_POST['dbem_bookings_currency'] );
-	}else{
-		delete_post_meta( $post->ID, '_event_currency' );
-	}
-
+    // Check if the currency option is set in the POST data
+    if (isset($_POST['dbem_bookings_currency'])) {
+        // Update the post meta with the selected currency
+        update_post_meta($post_id, 'star_em_event_currency', $_POST['dbem_bookings_currency']);
+    } else {
+        // If the currency option is not set, delete the post meta
+        delete_post_meta($post_id, 'star_em_event_currency');
+    }
 }
-add_action('save_post', 'em_curr_save_post', 1, 2);
+add_action('save_post', 'em_curr_save_post', 10, 2);
 
 
 
@@ -156,9 +174,9 @@ function em_curr_ticket_get_price( $ticket_price, $EM_Ticket ) {
 	$EM_Event = $EM_Ticket->get_event();
 
 	// Does this event have a custom currency?
-	if( get_post_meta( $EM_Event->post_id, '_event_currency', true ) ) {
+	if( get_post_meta( $EM_Event->post_id, 'star_em_event_currency', true ) ) {
 		// If so we set this to our global $modify_currency var for use later on
-		$modify_currency = get_post_meta( $EM_Event->post_id, '_event_currency', true );
+		$modify_currency = get_post_meta( $EM_Event->post_id, 'star_em_event_currency', true );
 	}
 	return $ticket_price;
 }
@@ -177,9 +195,9 @@ function em_curr_em_booking_get_spaces( $ticket_booking_spaces, $EM_Object ) {
 	  $EM_Event = $EM_Object->get_ticket()->get_event();
 
 		// Does this event have a custom currency?
-		if( get_post_meta( $EM_Event->post_id, '_event_currency', true ) ) {
+		if( get_post_meta( $EM_Event->post_id, 'star_em_event_currency', true ) ) {
 			// If so we set this to our global $modify_currency var for use later on
-			$modify_currency = get_post_meta( $EM_Event->post_id, '_event_currency', true );
+			$modify_currency = get_post_meta( $EM_Event->post_id, 'star_em_event_currency', true );
 		}
 	}
 	return $ticket_booking_spaces;
@@ -192,32 +210,34 @@ add_filter('em_booking_get_spaces','em_curr_em_booking_get_spaces', 10, 2);
  * Modify currency symbol if determined previously that this needs changing
  */
 function em_curr_get_currency_formatted($formatted_price, $price, $currency, $format) {
-	global $modify_currency;
+    global $modify_currency;
 
-	if( $modify_currency ){
-		$formatted_price = str_replace('@', em_get_currency_symbol(true,$modify_currency), $format);
-		$formatted_price = str_replace('#', number_format( $price, 2, get_option('dbem_bookings_currency_decimal_point','.'), get_option('dbem_bookings_currency_thousands_sep',',') ), $formatted_price);
-	}
+    // Check if currency modification is needed
+    if ($modify_currency) {
+        // Replace placeholders in the format string with currency symbol and formatted price
+        $formatted_price = str_replace('@', em_get_currency_symbol(true, $modify_currency), $format);
+        $formatted_price = str_replace('#', number_format($price, 2, get_option('dbem_bookings_currency_decimal_point', '.'), get_option('dbem_bookings_currency_thousands_sep', ',')), $formatted_price);
+    }
 
-	return $formatted_price;
+    return $formatted_price;
 }
-add_filter('em_get_currency_formatted', 'em_curr_get_currency_formatted', 10, 4);
 
+// Add filter to modify currency formatting
+add_filter('em_get_currency_formatted', 'em_curr_get_currency_formatted', 10, 4);
 
 /************** Modify currency in booking admin ********************/
 
 /**
  * Add our custom column for the total with the correct currency to the column template
  */
-function em_curr_bookings_table_cols_template( $cols_template ) {
-	if( is_admin() ) {
-
-		if( isset( $cols_template['booking_price'] ) ) {
-			unset( $cols_template['booking_price'] );
-		}
-		$cols_template['booking_currency_price'] = 'Total';
-	}
-	return $cols_template;
+function em_curr_bookings_table_cols_template($cols_template) {
+    if (is_admin()) {
+        if (isset($cols_template['booking_price'])) {
+            unset($cols_template['booking_price']);
+        }
+        $cols_template['booking_currency_price'] = 'Total';
+    }
+    return $cols_template;
 }
 add_filter('em_bookings_table_cols_template', 'em_curr_bookings_table_cols_template', 10, 1);
 
@@ -225,80 +245,78 @@ add_filter('em_bookings_table_cols_template', 'em_curr_bookings_table_cols_templ
 /**
  * Ensure that our custom column is actually included where required
  */
-function em_curr_bookings_table( $EM_Bookings_Table ) {
-	if( !in_array('booking_currency_price', $EM_Bookings_Table->cols) ) {
-		$EM_Bookings_Table->cols[] = 'booking_currency_price';
+function em_curr_bookings_table($EM_Bookings_Table) {
+    if (!in_array('booking_currency_price', $EM_Bookings_Table->cols)) {
+        // Add the custom column to the table columns
+        $EM_Bookings_Table->cols[] = 'booking_currency_price';
 
-		// reorder array so actions at the end
-		if(($key = array_search('actions', $EM_Bookings_Table->cols)) !== false) {
-			unset($EM_Bookings_Table->cols[$key]);
-			$EM_Bookings_Table->cols[] = 'actions';
-		}
-	}
+        // Reorder array so actions are at the end
+        if (($key = array_search('actions', $EM_Bookings_Table->cols)) !== false) {
+            unset($EM_Bookings_Table->cols[$key]);
+            $EM_Bookings_Table->cols[] = 'actions';
+        }
+    }
 }
-add_action('em_bookings_table', 'em_curr_bookings_table', 10, 1);
+// Hook into em_bookings_table action with a priority of 20 to ensure it runs after the table is created
+add_action('em_bookings_table', 'em_curr_bookings_table', 20, 1);
 
 
 /**
  * Deal with displaying the output of the total with correct currency in our custom column
  */
-function em_curr_bookings_table_rows_col_booking_currency_price($val, $EM_Booking, $EM_Bookings_Table, $csv) {
+function em_curr_bookings_table_rows_col_booking_currency_price($val, $EM_Booking, $EM_Bookings_Table) {
+    $EM_Event = $EM_Booking->get_event();
 
-	$EM_Event = $EM_Booking->get_event();
-
-	if( get_post_meta( $EM_Event->post_id, '_event_currency', true ) ) {
-		$price = $EM_Booking->get_price(false);
-		$currency = get_post_meta( $EM_Event->post_id, '_event_currency', true );
-		$format = get_option('dbem_bookings_currency_format','@#');
-		$formatted_price = str_replace('@', em_get_currency_symbol(true,$currency), $format);
-		$formatted_price = str_replace('#', number_format( $price, 2, get_option('dbem_bookings_currency_decimal_point','.'), get_option('dbem_bookings_currency_thousands_sep',',') ), $formatted_price);
-	}else{
-		$formatted_price = $EM_Booking->get_price(true);
-	}
-	return $formatted_price;
+    if (get_post_meta($EM_Event->post_id, 'star_em_event_currency', true)) {
+        $price = $EM_Booking->get_price(false);
+        $currency = get_post_meta($EM_Event->post_id, 'star_em_event_currency', true);
+        $format = get_option('dbem_bookings_currency_format', '@#');
+        $formatted_price = str_replace('@', em_get_currency_symbol(true, $currency), $format);
+        $formatted_price = str_replace('#', number_format($price, 2, get_option('dbem_bookings_currency_decimal_point', '.'), get_option('dbem_bookings_currency_thousands_sep', ',')), $formatted_price);
+    } else {
+        $formatted_price = $EM_Booking->get_price(true);
+    }
+    return $formatted_price;
 }
-add_filter('em_bookings_table_rows_col_booking_currency_price', 'em_curr_bookings_table_rows_col_booking_currency_price', 10, 5);
-
-
+// Hook into em_bookings_table_rows_col_booking_currency_price filter
+add_filter('em_bookings_table_rows_col_booking_currency_price', 'em_curr_bookings_table_rows_col_booking_currency_price', 10, 3);
 
 /************** Modify Currency for Payment Gateways ****************/
 
 /**
  * Hook into Sage Pay gateway and modify the currency if set on the event
  */
-function em_curr_gateway_sage_get_currency( $currency, $EM_Booking ) {
+function em_curr_gateway_sage_get_currency($currency, $EM_Booking) {
+    // Skip if multi bookings is enabled
+    if (get_option('dbem_multiple_bookings') == 1) {
+        return $currency;
+    }
 
-	// Skip if multi bookings is enabled
-	if( get_option('dbem_multiple_bookings') == 1 ) {
-		return $currency;
-	}
+    $EM_Event = $EM_Booking->get_event();
+    if (get_post_meta($EM_Event->post_id, 'star_em_event_currency', true)) {
+        $currency = get_post_meta($EM_Event->post_id, 'star_em_event_currency', true);
+    }
 
-	$EM_Event = $EM_Booking->get_event();
-	if( get_post_meta( $EM_Event->post_id, '_event_currency', true ) ) {
-		$currency = get_post_meta( $EM_Event->post_id, '_event_currency', true );
-	}
-
-	return $currency;
+    return $currency;
 }
 add_filter('em_gateway_sage_get_currency', 'em_curr_gateway_sage_get_currency', 10, 2);
 
 
 /**
- * Hook into PayPal vars and modify curreny if set on the event
+ * Hook into PayPal vars and modify currency if set on the event
  */
 function em_curr_gateway_paypal_get_paypal_vars($paypal_vars, $EM_Booking, $EM_PayPal_Gateway) {
+    // Skip if multi bookings is enabled
+    if (get_option('dbem_multiple_bookings') == 1) {
+        return $paypal_vars;
+    }
 
-	// Skip if multi bookings is enabled
-	if( get_option('dbem_multiple_bookings') == 1 ) {
-		return $paypal_vars;
-	}
+    $EM_Event = $EM_Booking->get_event();
+    if (get_post_meta($EM_Event->post_id, 'star_em_event_currency', true)) {
+        $paypal_vars['currency_code'] = get_post_meta($EM_Event->post_id, 'star_em_event_currency', true);
+    }
 
-	$EM_Event = $EM_Booking->get_event();
-	if( get_post_meta( $EM_Event->post_id, '_event_currency', true ) ) {
-		$paypal_vars['currency_code'] = get_post_meta( $EM_Event->post_id, '_event_currency', true );
-	}
-
-	return $paypal_vars;
+    return $paypal_vars;
 }
 add_filter('em_gateway_paypal_get_paypal_vars', 'em_curr_gateway_paypal_get_paypal_vars', 10, 3);
 
@@ -306,19 +324,18 @@ add_filter('em_gateway_paypal_get_paypal_vars', 'em_curr_gateway_paypal_get_payp
 /**
  * Hook into PayPal Chained payments and set currency if configured for the booking event
  */
-function em_curr_gateway_paypal_chained_paypal_request_data( $pay_pal_request_data, $EM_Booking ) {
+function em_curr_gateway_paypal_chained_paypal_request_data($paypal_request_data, $EM_Booking) {
+    // Skip if multi bookings is enabled
+    if (get_option('dbem_multiple_bookings') == 1) {
+        return $paypal_request_data;
+    }
 
-	// Skip if multi bookings is enabled
-	if( get_option('dbem_multiple_bookings') == 1 ) {
-		return $paypal_vars;
-	}
+    $EM_Event = $EM_Booking->get_event();
+    if (get_post_meta($EM_Event->post_id, 'star_em_event_currency', true)) {
+        $paypal_request_data['PayRequestFields']['CurrencyCode']
+            = get_post_meta($EM_Event->post_id, 'star_em_event_currency', true);
+    }
 
-	$EM_Event = $EM_Booking->get_event();
-	if( get_post_meta( $EM_Event->post_id, '_event_currency', true ) ) {
-		$pay_pal_request_data['PayRequestFields']['CurrencyCode']
-			= get_post_meta( $EM_Event->post_id, '_event_currency', true );
-	}
-
-	return $pay_pal_request_data;
+    return $paypal_request_data;
 }
 add_filter('em_gateway_paypal_chained_paypal_request_data', 'em_curr_gateway_paypal_chained_paypal_request_data', 10, 2);
